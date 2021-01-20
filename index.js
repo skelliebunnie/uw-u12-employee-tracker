@@ -1,6 +1,7 @@
 const mysql = require('mysql');
 const inquirer = require('inquirer');
 const chalk = require('chalk');
+const ctable = require('console.table');
 
 connection = mysql.createConnection({
 	host: 'localhost',
@@ -79,18 +80,59 @@ function start() {
 	then(answers => {
 		if(answers.action === 'addDepartment') {
 			console.log(chalk.green('Adding New Department'));
+
 			doAgain();
 
 		} else if(answers.action === 'addRole') {
 			console.log(chalk.blue('Adding New Role'));
+
 			doAgain();
 
 		} else if(answers.action === 'addEmployee') {
-			console.log(chalk.yellow('Adding New Employee'));
-			doAgain();
+			let employee = {
+				first_name: answers.employeeFirstName,
+				last_name: answers.employeeLastName,
+				role_id: null,
+				manager: null
+			}
+			let roleList = getRoles();
+			let employeeList = getEmployees();
+
+			roleList.then((res) => {
+				let roles = res.length > 0 ? makeChoices(res, "title", "id") : [];
+				let employees = employeeList.length > 0 ? makeChoices(employeeList, ["first_name", "last_name"], "id") : [];
+
+				roles.unshift({name: "None", value: "none"});
+				employees.unshift({name: "None", value: "none"});
+
+				inquirer.registerPrompt('search-list', require('inquirer-search-list'));
+				inquirer.prompt([
+					{
+						type: "search-list",
+						message: "Select a Role:",
+						name: "employeeRole",
+						choices: roles
+					},
+					{
+						type: "search-list",
+						message: "Select Manager:",
+						name: "employeeManager",
+						choices: employees
+					},
+				]).then((newInfo) => {
+					employee.role_id = newInfo.employeeRole !== "none" ? newInfo.employeeRole : null;
+					employee.manager = newInfo.employeeManager !== "none" ? newInfo.employeeManager : null;
+
+					console.log(employee);
+
+					doAgain();
+				});
+			});
 
 		} else {
 			console.log(chalk.red("Goodbye!"));
+			connection.end();
+			return;
 		}
 	});
 }
@@ -105,9 +147,11 @@ function doAgain() {
 	]).then(answers => {
 		if(answers.doAgain) {
 			start();
+
 		} else {
-			console.log('Goodbye!');
+			console.log(chalk.bold.bgCyan('Goodbye!'));
 			connection.end();
+			return;
 		}
 
 	});
@@ -126,25 +170,109 @@ function query(sql, args = []) {
 	});
 }
 
-async function getDepartments() {
-	const result = await query('SELECT * FROM departments');
+async function getDepartments(where={}) {
+	let result;
+	let sql = 'SELECT * FROM departments';
+	let args = [];
 
-	if(Array.isArray(result) && result.length > 0) return result[0];
-	return null;
+	if(!isEmpty(where)) {
+		args = Object.values(where);
+
+		sql += ' WHERE ';
+		for(var prop in where) {
+			sql += `${prop}=? `;
+		}
+
+		result = await query(sql.trim(), args);
+
+	} else {
+		result = await query(sql);
+
+	}
+
+	if(Array.isArray(result) && result.length > 0) return result;
+	return [];
 }
 
-async function getRoles() {
-	const result = await query('SELECT * FROM roles');
+async function getRoles(where={}) {
+	let result;
+	let sql = 'SELECT * FROM roles';
+	let args = [];
 
-	if(Array.isArray(result) && result.length > 0) return result[0];
-	return null;
+	if(!isEmpty(where)) {
+		args = Object.values(where);
+
+		sql += ' WHERE ';
+		for(var prop in where) {
+			sql += `${prop}=? `;
+		}
+
+		result = await query(sql.trim(), args);
+
+	} else {
+		result = await query(sql);
+
+	}
+
+	if(Array.isArray(result) && result.length > 0) return result;
+	return [];
 }
 
-async function getEmployees() {
-	const result = await query('SELECT * FROM employees');
+async function getEmployees(where={}) {
+	let result;
+	let sql = 'SELECT * FROM employees';
+	let args = [];
 
-	if(Array.isArray(result) && result.length > 0) return result[0];
-	return null;
+	if(!isEmpty(where)) {
+		args = Object.values(where);
+
+		sql += ' WHERE ';
+		for(var prop in where) {
+			sql += `${prop}=? `;
+		}
+
+		result = await query(sql.trim(), args);
+
+	} else {
+		result = await query(sql);
+
+	}
+
+	if(Array.isArray(result) && result.length > 0) return result;
+	return [];
 }
+
+function makeChoices(arr, nameKey, valKey) {
+	let choices = [];
+
+	for(var i = 0; i < arr.length; i++) {
+		let name = "";
+		if(Array.isArray(nameKey)) name = arr[i][nameKey];
+		if(!Array.isArray(nameKey)) {
+			for(var i in nameKey) {
+				let key = nameKey[i];
+				name += `${arr[key]} `;
+			}
+		}
+
+		let obj = {
+			name: name.trim(),
+			value: arr[i][valKey]
+		}
+		choices.push(obj);
+	}
+
+	return choices;
+}
+
+// https://stackoverflow.com/a/679937
+function isEmpty(obj) {
+  for(var prop in obj) {
+    if(obj.hasOwnProperty(prop))
+      return false;
+  }
+
+  return true;
+} 
 
 start();

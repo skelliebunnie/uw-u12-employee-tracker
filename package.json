@@ -5,13 +5,15 @@
   "main": "index.js",
   "dependencies": {
     "chalk": "^4.1.0",
+    "console.table": "^0.10.0",
     "inquirer": "^7.3.3",
     "inquirer-search-list": "^1.2.6",
     "mysql": "^2.18.1"
   },
   "devDependencies": {},
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js"
   },
   "repository": {
     "type": "git",
