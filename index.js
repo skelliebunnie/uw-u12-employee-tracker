@@ -11,7 +11,7 @@ connection = mysql.createConnection({
 });
 
 function start() {
-	inquirerprompt([
+	inquirer.prompt([
 		{
 			type: 'list',
 			name: 'action',
@@ -54,7 +54,7 @@ function start() {
 		{
 			type: "input",
 			name: "roleSalary",
-			message: "Role Salary: ",
+			message: "Annual Salary: ",
 			when: function(answers) {
 				return answers.action === 'addRole' ? true : false;
 			}
@@ -79,12 +79,15 @@ function start() {
 	then(answers => {
 		if(answers.action === 'addDepartment') {
 			console.log(chalk.green('Adding New Department'));
+			doAgain();
 
 		} else if(answers.action === 'addRole') {
-			console.log(chalk.red('Adding New Role'));
+			console.log(chalk.blue('Adding New Role'));
+			doAgain();
 
 		} else if(answers.action === 'addEmployee') {
-			console.log(chalk.yellow('Adding New Department'));
+			console.log(chalk.yellow('Adding New Employee'));
+			doAgain();
 
 		} else {
 			console.log(chalk.red("Goodbye!"));
@@ -93,7 +96,7 @@ function start() {
 }
 
 function doAgain() {
-	inquirerprompt([
+	inquirer.prompt([
 		{
 			type: "confirm",
 			name: "doAgain",
@@ -108,6 +111,40 @@ function doAgain() {
 		}
 
 	});
+}
+
+/**
+ * query and async function setup from here:
+ * https://stackoverflow.com/questions/60603462/getting-result-from-mysql?noredirect=1&lq=1
+ */
+function query(sql, args = []) {
+	return new Promise(function(resolve, reject) {
+		connection.query(sql, args, (err, result) => {
+			if(err) return reject(err);
+			resolve(result);
+		});
+	});
+}
+
+async function getDepartments() {
+	const result = await query('SELECT * FROM departments');
+
+	if(Array.isArray(result) && result.length > 0) return result[0];
+	return null;
+}
+
+async function getRoles() {
+	const result = await query('SELECT * FROM roles');
+
+	if(Array.isArray(result) && result.length > 0) return result[0];
+	return null;
+}
+
+async function getEmployees() {
+	const result = await query('SELECT * FROM employees');
+
+	if(Array.isArray(result) && result.length > 0) return result[0];
+	return null;
 }
 
 start();
