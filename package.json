@@ -1,0 +1,27 @@
+{
+  "name": "uw-u12-employee-tracker",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "dependencies": {
+    "chalk": "^4.1.0",
+    "inquirer": "^7.3.3",
+    "inquirer-search-list": "^1.2.6",
+    "mysql": "^2.18.1"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skelliebunnie/uw-u12-employee-tracker.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/skelliebunnie/uw-u12-employee-tracker/issues"
+  },
+  "homepage": "https://github.com/skelliebunnie/uw-u12-employee-tracker#readme"
+}
