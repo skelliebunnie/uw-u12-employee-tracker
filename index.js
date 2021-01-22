@@ -13,31 +13,26 @@ connection = mysql.createConnection({
 	database: 'employee_tracker_db'
 });
 
-let departments = [];
-let roles 			= [];
-let employees 	= [];
+let type = [
+	{
+		name: "Department",
+		value: 'departments'
+	},
+	{
+		name: "Role",
+		value: 'roles'
+	},
+	{
+		name: "Employee",
+		value: 'employees'
+	},
+	{
+		name: ">> BACK <<",
+		value: 'back'
+	}
+];
 
 function start() {
-
-	let type = [
-		{
-			name: "Department",
-			value: 'departments'
-		},
-		{
-			name: "Role",
-			value: 'roles'
-		},
-		{
-			name: "Employee",
-			value: 'employees'
-		},
-		{
-			name: ">> BACK <<",
-			value: 'back'
-		}
-	];
-
 	inquirer.prompt([
 		{
 			type: 'list',
@@ -59,6 +54,10 @@ function start() {
 				{
 					name: "Delete",
 					value: 'remove'
+				},
+				{
+					name: "View Utilized Budget",
+					value: "budget"
 				},
 				{
 					name: "Exit",
@@ -122,11 +121,23 @@ function start() {
 		}
 
 		if(answers.action === "list" && answers.target !== "back") {
-			list(answers.target);
+			if(answers.target === "employees") {
+				listEmployees();
+			} else {
+				list(answers.target);
+			}
 		}
 
 		if(answers.action === "modify" && answers.target !== "back") {
 			modify(answers.target);
+		}
+
+		if(answers.action === "remove" && answers.target !== "back") {
+			remove(answers.target);
+		}
+
+		if(answers.action === "budget") {
+			viewUtilizedBudget();
 		}
 
 		if(answers.target === "back") {
@@ -135,7 +146,8 @@ function start() {
 
 		if(answers.action === "exit") {
 			console.log(chalk.bgCyan(' Goodbye! '));
-			if(connection.status !== "disconnected") connection.end();
+			connection.end();
+			return;
 		}
 	});
 }
@@ -148,13 +160,17 @@ function addDepartment() {
 			name: "name"
 		}
 	]).then(answers => {
-		insert('departments', {name: answers.name});
+		if(answers.name !== "") {
+			insert('departments', {name: answers.name});
 
-		let departments = get('departments');
-		for(var i in departments) {
-			if(departments[i].name === answers.name) {
-				console.log(chalk.bgGreen(` Successfully added ${departments[i].name} as a new Department `));
+			let departments = get('departments');
+			for(var i in departments) {
+				if(departments[i].name === answers.name) {
+					console.log(chalk.bgGreen(` Successfully added ${departments[i].name} as a new Department `));
+				}
 			}
+		} else {
+			console.log(chalk.bgOrange(' Cannot add a Department with a blank name '));
 		}
 
 		start();
@@ -236,10 +252,9 @@ function addEmployee() {
 			employee.manager_id = employee.manager_id !== "none" ? employee.manager_id : null;
 
 			if(employee.role_id !== "none") {
-				insert('employees', employee);
+				let insertEmployee = insert('employees', employee);
 
-				let check = get('employees');
-				check.then(employees => {
+				insertEmployee.then(employees => {
 					for(var i in employees) {
 						if(employees[i].first_name === employee.first_name && employees[i].last_name === employee.last_name) {
 							console.log(chalk.bgGreen(` Successfully added ${employees[i].first_name} ${employees[i].last_name} as a new employee `));
@@ -416,7 +431,7 @@ function modify(table) {
 				let check = get(table);
 				check.then(res => {
 					if(res.length > 0) {
-						console.log(chalk.bgGreen(` Successfully updated the ${table} table @ ID ${answers.targetID} to ${answers.newValue} `));
+						console.log(chalk.bgGreen(` Successfully updated the key ${answers.targetKey} in the ${table} table @ ID ${answers.targetID} to ${answers.newValue} `));
 					}
 					start();
 				});
@@ -428,17 +443,188 @@ function modify(table) {
 }
 
 function list(table) {
-	let results = get(table);
+	let data = get(table);
 
-	results.then(data => {
-		if(data.length > 0) {
-			console.table(data);
+	data.then(results => {
+		if(results.length > 0) {
+			console.table(results);
+
 		} else {
-			console.log(chalk.bgRed(`No ${table} found.`));
+			console.log(chalk.bgRed(` No ${table} found. `));
+		}
+
+		start();
+	});
+}
+
+function listEmployees() {
+	let data = get("employees");
+
+	data.then(employees => {
+		let choices = employees.length > 0 ? makeChoices(employees, "full_name", "id") : [];
+		if(choices.length > 0) {
+			inquirer.prompt([
+				{
+					type: "confirm",
+					name: "confirm",
+					message: "Would you like to view employees for a specific Manager?"
+				},
+				{
+					type: "search-list",
+					name: "manager_id",
+					message: "Select Manager:",
+					choices: choices,
+					when: function(answers) {
+						if(answers.confirm && choices.length > 0) return true;
+
+						return false;
+					}
+				}
+			]).then(answers => {
+				// console.log(answers);
+				if(answers.confirm == true) {
+					listEmployeesByManager(answers.manager_id);
+
+				} else {
+					console.table(employees);
+					start();
+
+				}
+
+			});
+
+		} else {
+			console.table(employees);
+			start();
+		}
+	});
+}
+
+function listEmployeesByManager(manager_id) {
+	let list = query('SELECT * FROM employees WHERE manager_id=?', [manager_id]);
+
+	list.then(results => {
+		if(results.length > 0) {
+			console.table(results);
+
+		} else {
+			console.log(chalk.bgRed(` No direct reports found. `));
 		}
 		start();
 	});
-} 
+}
+
+function viewUtilizedBudget() {
+	let data = get("departments");
+
+	data.then(departments => {
+		let choices = departments.length > 0 ? makeChoices(departments, "name", "id") : [];
+
+		if(choices.length > 0) {
+			inquirer.prompt([
+				{
+					type: "search-list",
+					name: "department_id",
+					message: "Select Department:",
+					choices: choices
+				}
+			]).then(answers => {
+				let department_id = answers.department_id;
+
+				// utilized budget = combined salaries of all employees in a department
+				// department -> role (has salary) -> employees
+				// get all employees with a role that as department_id = department id
+				let sql = 'SELECT SUM(salary) AS utilized_budget FROM roles JOIN employees ON employees.role_id=roles.id WHERE department_id=?';
+				let list = query(sql, [department_id]);
+				list.then(results => {
+					if(results.length > 0 && results.utilized_budget != null) {
+						console.table(results);
+
+					} else {
+						console.log(chalk.bgRed(` No data found. `));
+					}
+					start();
+				});
+			});
+		}
+
+	});
+}
+
+function remove(table) {
+	let data = getAll();
+
+	data.then(res => {
+		let choices = [], key;
+		if(table === "departments") {
+			choices = res[0];
+			key = "name";
+		} else if(table === "roles") {
+			choices = res[1];
+			key = "title";
+		} else {
+			choices = res[2];
+			key = "full_name";
+		}
+		choices = choices.length > 0 ? makeChoices(choices, key, "id") : [{name: "None", value: "none", short: "None"}];
+		
+		if(choices.length > 0) {
+			inquirer.prompt([
+				{
+					type: "search-list",
+					name: "targetID",
+					message: `Which of the ${table} do you want to delete?`,
+					choices: choices
+				}
+			]).then(answers => {
+				let targetID = answers.targetID;
+				let target = choices.filter(choice => choice.value == answers.targetID);
+				
+				if(table === "departments" || table === "roles") {
+					let newChoices = choices.filter(choice => choice.id != answers.targetID);
+					let tableName = table.slice(0, -1);
+
+					inquirer.prompt([
+						{
+							type: "search-list",
+							name: "newID",
+							message: `You must select a replacement ${tableName}:`,
+							choices: newChoices
+						}
+					]).then(answers => {
+						let newID = answers.newID;
+
+						let set = [], where = [];
+						if(table === "roles") {
+							set = ["role_id", "=", newID];
+							where = ["role_id", "=", targetID];
+							update("employees", set, where);
+
+						} else if(table === "departments") {
+							set = ["department_id", "=", newID];
+							where = ["department_id", "=", targetID];
+							update("roles", set, where);
+
+						}
+
+						destroy(table, {id: answers.targetID});
+						console.log(chalk.bold.bgRed(` DELETED ${target[0].name} from ${table} `));
+
+						start();
+					});
+
+				} else {
+					start();
+
+				}
+			});
+
+		} else {
+			console.log(chalk.bold.bgRed(` No ${table} found. `));
+			start();
+		}
+	});
+}
 
 /**
  * query and async function setup from here:
@@ -501,16 +687,16 @@ async function insert(table, data) {
 	let result;
 
 	let keys = Object.keys(data).join(",");
-	let values = Object.values(data);
+	let args = Object.values(data);
 
 	let valueMarks = [];
-	for(var i in values) {
+	for(var i in args) {
 		valueMarks.push("?");
 	}
 
 	let sql = `INSERT INTO ${table} (${keys}) VALUES (${valueMarks.join(',')})`;
 
-	result = await query(sql, values);
+	result = await query(sql, args);
 
 	// connection.end();
 	if(Array.isArray(result)) return result;
@@ -527,7 +713,7 @@ async function update(table, set, where) {
 	return [];
 }
 
-async function remove(table, where={}) {
+async function destroy(table, where={}) {
 	let result;
 	let sql = `DELETE FROM ${table}`;
 	let args = [];
@@ -553,18 +739,23 @@ async function remove(table, where={}) {
 }
 
 function makeChoices(arr, nameKey, valKey) {
-	// console.log(arr);
 	let choices = [];
 
 	for(var i = 0; i < arr.length; i++) {
 		let name = arr[i][nameKey];
 
-		if(nameKey === "full_name") name = `${arr[i].first_name} ${arr[i].last_name}`;
+		if(nameKey === "full_name") {
+			name = `${arr[i].first_name} ${arr[i].last_name}`;
+		}
+
+		if(name === "undefined undefined" || name === "undefined") {
+			name = arr[i].id;
+		}
 
 		let obj = {
-			name: name.trim(),
+			name: name,
 			value: arr[i][valKey],
-			short: name.trim()
+			short: name
 		}
 		choices.push(obj);
 	}
