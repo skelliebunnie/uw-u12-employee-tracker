@@ -33,8 +33,8 @@ function start() {
 			value: 'employees'
 		},
 		{
-			name: "Exit",
-			value: 'exit'
+			name: ">> BACK <<",
+			value: 'back'
 		}
 	];
 
@@ -103,39 +103,38 @@ function start() {
 			}
 		}
 	]).then(answers => {
-		if(answers.action === "add") {
-			departments = get("departments");
-			roles 			= get("roles");
-			employees 	= get("employees");
-
-			employees.then(res => {
-				switch(answers.target) {
-					case "departments":
-						addDepartment();
-						break;
-					case "roles":
-						addRole();
-						break;
-					case "employees":
-						addEmployee();
-						break;
-					default:
-						console.log("I don't know what to do!");
-						break;
-				}
-			});
+		if(answers.action === "add" && answers.target !== "back") {
+			switch(answers.target) {
+				case "departments":
+					addDepartment();
+					break;
+				case "roles":
+					addRole();
+					break;
+				case "employees":
+					addEmployee();
+					break;
+				default:
+					console.log(`I don't know how to target ${answers.target} - restarting`);
+					start();
+					break;
+			}
 		}
 
-		if(answers.action === "list") {
+		if(answers.action === "list" && answers.target !== "back") {
 			list(answers.target);
 		}
 
-		if(answers.action === "modify") {
+		if(answers.action === "modify" && answers.target !== "back") {
 			modify(answers.target);
 		}
 
+		if(answers.target === "back") {
+			start();
+		}
+
 		if(answers.action === "exit") {
-			console.log(chalk.bgRed(' Goodbye! '));
+			console.log(chalk.bgCyan(' Goodbye! '));
 			if(connection.status !== "disconnected") connection.end();
 		}
 	});
@@ -167,7 +166,6 @@ function addRole() {
 
 	departmentList.then(data => {
 		let departments = data.length > 0 ? makeChoices(data, "name", "id") : [];
-		// departments.unshift({name: "None", value: "none"});
 
 		inquirer.prompt([
 			{
@@ -203,15 +201,13 @@ function addRole() {
 }
 
 function addEmployee() {
-	let roleList = get('roles');
-	let employeeList = get('employees');
+	let all = getAll();
 
-	roleList.then(data => {
-		let roles = data.length > 0 ? makeChoices(data, "title", "id") : [];
-		let employees = employeeList.length > 0 ? makeChoices(employeeList, ["first_name", "last_name"], "id") : [];
+	all.then(data => {
+		let roles = data[1].length > 0 ? makeChoices(data[1], "title", "id") : [];
+		let employees = data[2].length > 0 ? makeChoices(data[2], "full_name", "id") : [];
 
-		roles.unshift({name: "None", value: "none"});
-		employees.unshift({name: "None", value: "none"});
+		employees.unshift({name: "None", value: "none", short: "None"});
 
 		inquirer.prompt([
 			{
@@ -237,56 +233,60 @@ function addEmployee() {
 				choices: employees
 			}
 		]).then((employee) => {
-			employee.role_id = employee.role_id !== "none" ? employee.role : null,
-			employee.manager = employee.manager_id !== "none" ? employee.manager : null,
+			employee.manager_id = employee.manager_id !== "none" ? employee.manager_id : null;
 
-			insert('employees', employee);
+			if(employee.role_id !== "none") {
+				insert('employees', employee);
 
-			let employees = get('employees');
-			for(var i in employees) {
-				if(employees[i].first_name === answers.first_name && employees[i].last_name === answers.last_name) {
-					console.log(chalk.bgGreen(` Successfully added ${employees[i].first_name} ${employees[i].last_name} as a new employee `));
-				}
+				let check = get('employees');
+				check.then(employees => {
+					for(var i in employees) {
+						if(employees[i].first_name === employee.first_name && employees[i].last_name === employee.last_name) {
+							console.log(chalk.bgGreen(` Successfully added ${employees[i].first_name} ${employees[i].last_name} as a new employee `));
+						}
+					}
+
+					start();
+				});
+			} else {
+				console.log(chalk.bgRed(' You MUST select a role for the employee! Please try again. '));
+				addEmployee();
 			}
-
-			start();
 		});
 	})
 }
 
 function modify(table) {
 
-	let rolesList = get("roles");
-	let employeesList = get('employees');
-	let departmentsList = get("departments");
+	let all = getAll();
 
-
-	departmentsList.then(data => {
-		let departments = data.length > 0 ? makeChoices(data, "name", "id") : [{name: "None", value: "none"}];
-		let roles = rolesList.length > 0 ? makeChoices(rolesList, "name", "id") : [{name: "None", value: "none"}];
-		let employees = employeesList.length > 0 ? makeChoices(employeesList, "name", "id") : [{name: "None", value: "none"}];
+	all.then(data => {
+		let departments = data[0].length > 0 ? makeChoices(data[0], "name", "id") : [{name: "None", value: "none", short: "None"}];
+		let roles = data[1].length > 0 ? makeChoices(data[1], "title", "id") : [{name: "None", value: "none", short: "None"}];
+		let employees = data[2].length > 0 ? makeChoices(data[2], "full_name", "id") : [{name: "None", value: "none", short: "None"}];
 
 		inquirer.prompt([
 			{
 				type: "search-list",
-				name: "target",
+				name: "targetID",
 				message: "Which Department would you like to update?",
 				choices: departments,
 				when: function(answers) {
 					return table === "departments" ? true : false;
 				}
 			},
+			// targetKey = "name" for department
 			{
 				type: "input",
 				message: "New Name:",
-				name: "departmentName",
+				name: "newValue",
 				when: function(answers) {
 					return table === "departments" ? true : false;
 				}
 			},
 			{
 				type: "search-list",
-				name: "target",
+				name: "targetID",
 				message: "Which Role would you like to update?",
 				choices: roles,
 				when: function(answers) {
@@ -295,9 +295,10 @@ function modify(table) {
 			},
 			{
 				type: "list",
-				name: "target",
+				name: "targetKey",
 				message: "What do you want to update?",
-				choices: [{name: "Title", value: "title"}, {name: "Salary", value: "salary"}, {name: "Department", value: "roleDepartment"}],
+				choices: [
+				{name: "Title", value: "title"}, {name: "Salary", value: "salary"}, {name: "Department", value: "department_id"}],
 				when: function(answers) {
 					return table === "roles" ? true : false;
 				}
@@ -305,7 +306,7 @@ function modify(table) {
 			{
 				type: "input",
 				message: "New Title:",
-				name: "roleTitle",
+				name: "newValue",
 				when: function(answers) {
 					if(table === "roles" && answers.target === "title") {
 						return true;
@@ -316,7 +317,7 @@ function modify(table) {
 			{
 				type: "number",
 				message: "New Annual Salary:",
-				name: "roleSalary",
+				name: "newValue",
 				when: function(answers) {
 					if(table === "roles" && answers.target === "salary") {
 						return true;
@@ -327,10 +328,10 @@ function modify(table) {
 			{
 				type: "list",
 				message: "New Department:",
-				name: "roleDepartment",
+				name: "newValue",
 				choices: departments,
 				when: function(answers) {
-					if(table === "roles" && answers.target === "roleDepartment") {
+					if(table === "roles" && answers.target === "department_id") {
 						return true;
 					}
 					return false;
@@ -338,7 +339,7 @@ function modify(table) {
 			},
 			{
 				type: "search-list",
-				name: "target",
+				name: "targetID",
 				message: "Which Employee would you like to update?",
 				choices: employees,
 				when: function(answers) {
@@ -347,9 +348,9 @@ function modify(table) {
 			},
 			{
 				type: "list",
-				name: "target",
+				name: "targetKey",
 				message: "What do you want to update?",
-				choices: [{name: "First Name", value: "first"}, {name: "Last Name", value: "last"}, {name: "Role", value: "role"}, {name: "Manager", value: "manager"}],
+				choices: [{name: "First Name", value: "first_name"}, {name: "Last Name", value: "last_name"}, {name: "Role", value: "role_id"}, {name: "Manager", value: "manager_id"}],
 				when: function(answers) {
 					return table === "roles" ? true : false;
 				}
@@ -357,7 +358,7 @@ function modify(table) {
 			{
 				type: "input",
 				message: "New First Name:",
-				name: "newFirstName",
+				name: "newValue",
 				when: function(answers) {
 					if(table === "employees" && answers.target === "first") {
 						return true;
@@ -368,7 +369,7 @@ function modify(table) {
 			{
 				type: "input",
 				message: "New Last Name:",
-				name: "newLastName",
+				name: "newValue",
 				when: function(answers) {
 					if(table === "employees" && answers.target === "last") {
 						return true;
@@ -379,7 +380,7 @@ function modify(table) {
 			{
 				type: "list",
 				message: "New Role:",
-				name: "employeeRole",
+				name: "newValue",
 				choices: roles,
 				when: function(answers) {
 					if(table === "employee" && answers.target === "role") {
@@ -391,7 +392,7 @@ function modify(table) {
 			{
 				type: "list",
 				message: "New Manager:",
-				name: "employeeManager",
+				name: "newValue",
 				choices: employees,
 				when: function(answers) {
 					if(table === "employee" && answers.target === "manager") {
@@ -401,7 +402,22 @@ function modify(table) {
 				}
 			}
 		]).then(answers => {
+			if(table === "departments") answers.targetKey = "name";
+			let set = [answers.targetKey, "=", answers.newValue];
+			let where = ["id", "=", answers.targetID];
+
 			console.log(answers);
+			return;
+
+			update(table, set, where);
+
+			let check = get(table);
+			check.then(res => {
+				if(res.length > 0) {
+					console.log(chalk.bgGreen(` Successfully updated the ${table} table @ ID ${answers.targetID} to ${answers.newValue} `));
+				}
+				start();
+			});
 		});
 	})
 }
@@ -461,11 +477,19 @@ async function get(table) {
 }
 
 async function getSingle(table, id) {
-	result = await query(`SELECT * FROM ${table} WHERE id=?`, [id]);
+	let result = await query(`SELECT * FROM ${table} WHERE id=?`, [id]);
 
 	// connection.end();
 	if(Array.isArray(result)) return result;
 	return [];
+}
+
+async function getAll() {
+	let departments = await query('SELECT * FROM departments');
+	let roles = await query('SELECT * FROM roles');
+	let employees = await query('SELECT * FROM employees');
+
+	return [departments, roles, employees];
 }
 
 async function insert(table, data) {
@@ -491,7 +515,7 @@ async function insert(table, data) {
 async function update(table, set, where) {
 	let result;
 
-	result = await query(`UPDATE ${table} SET ${set[0]}${set[1]}${set[2]} WHERE ${where[0]}${where[1]}${$where[2]}`);
+	result = await query(`UPDATE ${table} SET ${set[0]}${set[1]}? WHERE ${where[0]}${where[1]}?`, [set[2], where[2]]);
 
 	// connection.end();
 	if(Array.isArray(result)) return result;
@@ -524,17 +548,13 @@ async function remove(table, where={}) {
 }
 
 function makeChoices(arr, nameKey, valKey) {
+	console.log(arr);
 	let choices = [];
 
 	for(var i = 0; i < arr.length; i++) {
-		let name = "";
-		if(!Array.isArray(nameKey)) name = arr[i][nameKey];
-		if(Array.isArray(nameKey)) {
-			for(var i in nameKey) {
-				let key = nameKey[i];
-				name += `${arr[key]} `;
-			}
-		}
+		let name = arr[i][nameKey];
+
+		if(nameKey === "full_name") name = `${arr[i].first_name} ${arr[i].last_name}`;
 
 		let obj = {
 			name: name.trim(),
