@@ -265,6 +265,10 @@ function modify(table) {
 		let roles = data[1].length > 0 ? makeChoices(data[1], "title", "id") : [{name: "None", value: "none", short: "None"}];
 		let employees = data[2].length > 0 ? makeChoices(data[2], "full_name", "id") : [{name: "None", value: "none", short: "None"}];
 
+		departments.push({name: " >> BACK << ", value: "back"});
+		roles.push({name: " >> BACK << ", value: "back"});
+		employees.push({name: " >> BACK << ", value: "back"});
+
 		inquirer.prompt([
 			{
 				type: "search-list",
@@ -308,7 +312,7 @@ function modify(table) {
 				message: "New Title:",
 				name: "newValue",
 				when: function(answers) {
-					if(table === "roles" && answers.target === "title") {
+					if(table === "roles" && answers.targetKey === "title") {
 						return true;
 					}
 					return false;
@@ -319,7 +323,7 @@ function modify(table) {
 				message: "New Annual Salary:",
 				name: "newValue",
 				when: function(answers) {
-					if(table === "roles" && answers.target === "salary") {
+					if(table === "roles" && answers.targetKey === "salary") {
 						return true;
 					}
 					return false;
@@ -331,7 +335,7 @@ function modify(table) {
 				name: "newValue",
 				choices: departments,
 				when: function(answers) {
-					if(table === "roles" && answers.target === "department_id") {
+					if(table === "roles" && answers.targetKey === "department_id") {
 						return true;
 					}
 					return false;
@@ -352,7 +356,7 @@ function modify(table) {
 				message: "What do you want to update?",
 				choices: [{name: "First Name", value: "first_name"}, {name: "Last Name", value: "last_name"}, {name: "Role", value: "role_id"}, {name: "Manager", value: "manager_id"}],
 				when: function(answers) {
-					return table === "roles" ? true : false;
+					return table === "employees" ? true : false;
 				}
 			},
 			{
@@ -360,7 +364,7 @@ function modify(table) {
 				message: "New First Name:",
 				name: "newValue",
 				when: function(answers) {
-					if(table === "employees" && answers.target === "first") {
+					if(table === "employees" && answers.targetKey === "first_name") {
 						return true;
 					}
 					return false;
@@ -371,7 +375,7 @@ function modify(table) {
 				message: "New Last Name:",
 				name: "newValue",
 				when: function(answers) {
-					if(table === "employees" && answers.target === "last") {
+					if(table === "employees" && answers.targetKey === "last_name") {
 						return true;
 					}
 					return false;
@@ -383,7 +387,7 @@ function modify(table) {
 				name: "newValue",
 				choices: roles,
 				when: function(answers) {
-					if(table === "employee" && answers.target === "role") {
+					if(table === "employees" && answers.targetKey === "role_id") {
 						return true;
 					}
 					return false;
@@ -395,29 +399,30 @@ function modify(table) {
 				name: "newValue",
 				choices: employees,
 				when: function(answers) {
-					if(table === "employee" && answers.target === "manager") {
+					if(table === "employees" && answers.targetKey === "manager_id") {
 						return true;
 					}
 					return false;
 				}
 			}
 		]).then(answers => {
-			if(table === "departments") answers.targetKey = "name";
-			let set = [answers.targetKey, "=", answers.newValue];
-			let where = ["id", "=", answers.targetID];
+			if(answers.targetID !== "back") {
+				if(table === "departments") answers.targetKey = "name";
+				let set = [answers.targetKey, "=", answers.newValue];
+				let where = ["id", "=", answers.targetID];
 
-			console.log(answers);
-			return;
+				update(table, set, where);
 
-			update(table, set, where);
-
-			let check = get(table);
-			check.then(res => {
-				if(res.length > 0) {
-					console.log(chalk.bgGreen(` Successfully updated the ${table} table @ ID ${answers.targetID} to ${answers.newValue} `));
-				}
+				let check = get(table);
+				check.then(res => {
+					if(res.length > 0) {
+						console.log(chalk.bgGreen(` Successfully updated the ${table} table @ ID ${answers.targetID} to ${answers.newValue} `));
+					}
+					start();
+				});
+			} else {
 				start();
-			});
+			}
 		});
 	})
 }
@@ -548,7 +553,7 @@ async function remove(table, where={}) {
 }
 
 function makeChoices(arr, nameKey, valKey) {
-	console.log(arr);
+	// console.log(arr);
 	let choices = [];
 
 	for(var i = 0; i < arr.length; i++) {
